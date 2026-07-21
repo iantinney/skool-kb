@@ -25,9 +25,11 @@ VIDEO_ID="${3:-}"
 
 [ -n "$URL" ] || { echo "usage: ./add_native.sh \"<m3u8 URL>\" \"Video Title\" [video_id]"; exit 1; }
 case "$URL" in
-  *.m3u8*|http*) : ;;
-  *) echo "!! That doesn't look like an HLS URL. Expected something ending in .m3u8?token=…"; exit 1 ;;
+  http://*|https://*) : ;;
+  *) echo "!! Expected an http(s) URL — the .m3u8 stream captured from DevTools > Network."; exit 1 ;;
 esac
+printf '%s' "$URL" | grep -qi 'm3u8' || \
+  echo "!! Heads up: that URL doesn't contain 'm3u8'. Skool HLS URLs normally do — trying anyway."
 
 [ -d .venv ] && source .venv/bin/activate
 [ -f .env ] && set -a && source .env && set +a
