@@ -189,6 +189,12 @@ def main():
         L.append(f"## ✅ In the KB ({len(in_kb)})")
         L.append("")
         L.append("See [INDEX.md](INDEX.md) for the per-file map of everything that's searchable.")
+        L.append("")
+        L.append("---")
+        L.append("<sub>Counts cover videos found on the pages the scraper reached. Classroom "
+                 "crawling is best-effort, so re-running `./run.sh scrape` may surface a few "
+                 "more lessons. \"In KB\" is determined by matching each video's id to a "
+                 "transcript filename.</sub>")
         (kb / "VIDEO_REPORT.md").write_text("\n".join(L) + "\n", encoding="utf-8")
 
     # ---- kb/MISSING_VIDEOS.md (native, drives add_native.sh) ----
