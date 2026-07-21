@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup help (read first)
+    url: https://github.com/iantinney/skool-kb/blob/main/docs/RUNBOOK.md
+    about: The manual runbook and troubleshooting table answer most setup questions.
+  - name: Security issue
+    url: https://github.com/iantinney/skool-kb/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately, not as a public issue.

@@ -1,0 +1,36 @@
+# ─── Secrets & session data (NEVER commit) ───────────────────────────
+cookies.txt
+cookies*.txt
+*.cookies
+.env
+.env.*
+!.env.example
+
+# ─── Your own config (community list can reveal what you're a member of) ─
+communities.txt
+
+# ─── Scraped content & media (your data, not for redistribution) ─────
+kb/posts/*
+kb/transcripts/*
+kb/INDEX.md
+!kb/posts/.gitkeep
+!kb/transcripts/.gitkeep
+audio/
+video_urls.txt
+native_videos.txt
+done.txt
+
+# ─── Python ──────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# ─── OS / editor cruft ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

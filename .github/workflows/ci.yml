@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    name: Lint & import smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Byte-compile all scripts
+        run: python -m py_compile skool_dump.py transcribe.py srt2txt.py build_index.py
+
+      - name: Install runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Import & CLI-help smoke test
+        run: |
+          python -c "import skool_dump, srt2txt, build_index; print('imports OK')"
+          python skool_dump.py --help >/dev/null && echo "skool_dump --help OK"
+
+      - name: ShellCheck the shell scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          shellcheck -e SC1091 run.sh bootstrap.sh
+
+      - name: Secret-leak guard (no cookies/keys committed)
+        run: |
+          if git ls-files | grep -E '(^|/)(cookies.*\.txt|\.env)$' ; then
+            echo "::error::A secret file is tracked in git!"; exit 1
+          fi
+          if git grep -nE 'gsk_[A-Za-z0-9]{20,}' -- . ':!*.md' ; then
+            echo "::error::Possible Groq key committed!"; exit 1
+          fi
+          echo "no tracked secrets"

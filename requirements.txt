@@ -1,0 +1,11 @@
+# Core scraper
+requests>=2.31
+
+# Video/caption/audio downloader (date-based versions; keep it fresh)
+yt-dlp>=2026.07.04
+
+# Local CPU transcription fallback (built on CTranslate2)
+faster-whisper>=1.0
+
+# Optional: fast cloud transcription via Groq (only needed if you set GROQ_API_KEY)
+groq>=0.11

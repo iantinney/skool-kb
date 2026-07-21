@@ -1,0 +1,9 @@
+# Copy this file to communities.txt and list the Skool communities you're a
+# MEMBER of — one root URL per line. Lines starting with # are ignored.
+#
+# Use the community ROOT url (the run script automatically also crawls the
+# community's /classroom section).
+#
+# Example:
+# https://www.skool.com/your-community
+# https://www.skool.com/another-community
