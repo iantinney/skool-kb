@@ -1,47 +1,68 @@
-# Native Skool-hosted videos (the hard case)
+# Native Skool-hosted videos (the one thing that isn't fully automatic)
 
 Skool hosts its own videos on [**Mux**](https://www.mux.com/case-studies/skool), delivered as
-**HLS (`.m3u8`) streams protected by short-lived signed tokens**. Those tokens expire quickly
-and are minted per playback session, so there's no stable URL the scraper can batch-download.
+**HLS (`.m3u8`) streams protected by short-lived signed tokens**, minted on demand by Skool's
+backend when their player asks for them. There is **no dedicated yt-dlp extractor** for Skool,
+and the stream URL isn't in the page (only a thumbnail is), so — unlike YouTube/Loom/Vimeo —
+native videos **cannot be downloaded automatically**. This is a real, documented limitation,
+not a bug in this tool.
 
-`skool_dump.py` still records what it finds in `native_videos.txt` (you'll mostly see
-`image.video.skool.com/.../thumbnail.png` entries — the thumbnails — which at least tell you
-how many native videos exist). Getting the actual video/audio takes one of the methods below.
+## You always know exactly what's missing
 
-## Option A — Free, per-video, with your browser + ffmpeg (recommended)
+The pipeline detects every native video (by the `videoIds` in each post/lesson), records its
+**title + source URL**, and writes **`kb/MISSING_VIDEOS.md`** — the honest list of native
+videos that are *not* in your knowledge base, with per-item instructions. The run summary also
+prints the count, and the KB's own `CLAUDE.md` tells the querying agent to flag this blind spot
+when a search comes up empty. So nothing is silently dropped — you can see precisely which
+lessons aren't indexed.
 
-1. Play the video in your browser. Open **DevTools → Network** and filter for `m3u8`.
-2. Copy the request URL of the playlist (it looks like `…/something.m3u8?token=…`).
-3. Download it with the Skool referer (the CDN requires it):
+Regenerate the report any time:
+```bash
+./run.sh report          # or: python3 report_missing.py kb
+```
+
+## Adding a native video (≈1 minute each, semi-automatic)
+
+The only manual part is capturing the stream URL from your browser (the signed token can't be
+obtained headless). After that, one command does download → audio → transcript → into the KB.
+
+1. Open the lesson/post in your browser and **start playing** the video.
+2. Open **DevTools (F12) → Network**, filter for **`m3u8`**, and copy the request URL — it
+   looks like `…/….m3u8?token=…`. (Tokens expire in minutes; copy it right before step 3.)
+3. From the project root:
    ```bash
-   yt-dlp --referer "https://www.skool.com/" -o "lesson.mp4" "<paste the .m3u8?token=... URL>"
-   # or with ffmpeg:
-   ffmpeg -headers "Referer: https://www.skool.com/" -i "<m3u8 url>" -c copy lesson.mp4
+   ./add_native.sh "<paste the m3u8 URL>" "Video Title" <video_id>
    ```
-4. The token expires fast — grab a fresh URL per video, right before downloading.
-5. To fold it into your KB, extract audio and transcribe:
-   ```bash
-   ffmpeg -i lesson.mp4 -vn -ac 1 -ar 16000 -b:a 48k "audio/Lesson Title.m4a"
-   ./run.sh transcribe
-   ```
+   The `<video_id>` is shown next to each item in `kb/MISSING_VIDEOS.md`; passing it lets the
+   report mark this video as done on the next refresh.
+4. Done — the transcript lands in `kb/transcripts/` and `MISSING_VIDEOS.md` updates.
 
-## Option B — A paid browser extension (convenience, not free/open-source)
+`add_native.sh` uses `yt-dlp`/`ffmpeg` with the required `Referer: https://www.skool.com/`
+header, extracts 48 kbps mono audio, and runs it through the same transcription backend as the
+rest of the pipeline (Groq if `GROQ_API_KEY` is set, else local Whisper).
 
-There is a maintained commercial extension, **"Downloader for Skool"** by SERP Apps
+## Bulk option: a paid browser extension (not free / not open-source)
+
+If you have *many* native videos and value time over a few dollars, there's a maintained
+commercial extension, **"Downloader for Skool"** by SERP Apps
 ([github.com/serpapps/skool-downloader](https://github.com/serpapps/skool-downloader), also on
-the Chrome Web Store), that automates the token dance and bulk-downloads Skool/Loom/Vimeo/
-YouTube/Wistia videos to MP4.
+the Chrome Web Store), that automates the token capture and bulk-downloads to MP4. Fair-warning
+so you decide with eyes open: it's **proprietary and freemium** (~3 free downloads, then paid),
+and its GitHub repo is mostly marketing/distribution rather than auditable source. After
+downloading, drop the audio into `audio/` and run `./run.sh transcribe`.
 
-Be aware, so you can decide with eyes open:
-- It is **proprietary and freemium** — roughly **3 free downloads**, then it's paid.
-- The GitHub repo is mostly **marketing/distribution**, not open source you can audit.
+## Why not just automate the token?
 
-If you have a lot of native videos and value your time over a few dollars, it's an option.
-For a free/auditable workflow, use **Option A**. After either, drop the resulting audio into
-`audio/` and run `./run.sh transcribe`.
+We looked into it and decided against it, on purpose:
+- The stream uses **Mux signed playback** — a direct request returns `Not Authorized` (403).
+- The thumbnail token Skool ships in the page is scoped to thumbnails (`aud: "t"`), not video.
+- A playback token (`aud: "v"`) is generated by Skool's WAF-protected backend for the player.
+  Replaying that flow headless is fragile, breaks whenever Skool changes it, and edges into
+  circumventing access controls — so this tool doesn't do it. The browser-capture step above is
+  the honest, stable, legitimate path (you're downloading your own paid content).
 
 ## Reality check
 
-If your communities are mostly text + YouTube/Loom/Vimeo videos, you can safely **ignore
-native videos** — the scraper + caption/Whisper passes already capture the large majority of
-the content. Native-video handling is the one area where full automation isn't possible today.
+If your communities are mostly text + YouTube/Loom/Vimeo, native videos may be a small slice —
+check `kb/MISSING_VIDEOS.md` to see the actual number before spending time on it. Everything
+else is already captured automatically.

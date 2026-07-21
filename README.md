@@ -38,11 +38,12 @@ Prefer to do it by hand? See the [Manual quickstart](#manual-quickstart) and the
 - Grab **free captions** for YouTube/Vimeo videos (no transcription cost or time).
 - **Transcribe** the rest via [Groq Whisper](https://console.groq.com/docs/speech-to-text) (fast, ~$0.04/audio-hour) or **local `faster-whisper`** on CPU (free, slower).
 - Produce a clean, de-duplicated, **plain-text knowledge base** + an `INDEX.md` map.
+- **Tell you exactly what's *not* in the KB** — native Skool videos it can't auto-download are listed by title in `kb/MISSING_VIDEOS.md`, and `./add_native.sh` adds any of them in a minute.
 - Re-run incrementally: already-downloaded audio and existing transcripts are skipped.
 
 ### ❌ It cannot (be honest with yourself)
 - **Access content you're not a member of.** It uses *your* logged-in session. It is not a way around paywalls or private communities you haven't joined.
-- **Reliably download native Skool-hosted videos in bulk.** Skool serves those via [Mux](https://www.mux.com/case-studies/skool) HLS with short-lived signed tokens. The scraper flags them but can't bulk-grab them. See [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md) for the free per-video method.
+- **Auto-download native Skool-hosted videos.** Skool serves those via [Mux](https://www.mux.com/case-studies/skool) HLS with short-lived signed tokens, so they can't be grabbed headless. But you're never left guessing: every one is listed by title in **`kb/MISSING_VIDEOS.md`**, and **`./add_native.sh`** adds any of them in ~1 minute from a browser-captured URL. See [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md).
 - **Guarantee YouTube downloads from a cloud server / VPS.** As of 2026, YouTube aggressively bot-checks datacenter IPs ("Sign in to confirm you're not a bot"). Logged-in cookies help but are **not a guaranteed bypass**. **Run this on your own computer (residential IP) for best results.** See [Troubleshooting](#troubleshooting).
 - **Bypass Skool's Terms.** This is for personal use of content you legitimately have access to. See [Legal & ethics](#legal--ethics).
 
@@ -61,7 +62,7 @@ cookies.txt ─────┼─▶ scrape __NEXT_DATA__ ─▶ captions + audi
 
 Skool is a Next.js app, so every page embeds its full data as JSON in a `__NEXT_DATA__` blob. `skool_dump.py` walks that JSON generically (it doesn't assume a schema, so it degrades gracefully if Skool changes shape), writing post/lesson text to `kb/posts/*.md` and every video URL to `video_urls.txt` / `native_videos.txt`.
 
-`run.sh` orchestrates five passes: **scrape → captions → audio → transcribe → clean/index**. Each is also runnable on its own.
+`run.sh` orchestrates the passes: **scrape → captions → audio → transcribe → clean → index → report**. Each is also runnable on its own (`./run.sh <step>`).
 
 ---
 
@@ -113,7 +114,7 @@ Most YouTube/Vimeo videos already have captions, which cost **zero** transcripti
 | `no __NEXT_DATA__ (login wall?)` | Cookies are missing or stale. Re-export `cookies.txt` (see [docs/COOKIES.md](docs/COOKIES.md)). |
 | YouTube: `Sign in to confirm you're not a bot` | The IP is bot-flagged (common on VPS/datacenter). Add fresh cookies; **run on your home machine** if possible. Heavy cases may need a [PO-token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) — still not guaranteed. |
 | YouTube: `Only images are available` / no audio | yt-dlp needs a JS runtime for YouTube. `./bootstrap.sh` installs Deno; the audio pass uses `--remote-components ejs:github`. |
-| Native Skool videos didn't download | Expected — they need signed HLS tokens. See [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md). |
+| Native Skool videos didn't download | Expected — they need signed HLS tokens. They're listed in `kb/MISSING_VIDEOS.md`; add any with `./add_native.sh` ([docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md)). |
 | Transcription is slow | You're on local CPU Whisper. Add a `GROQ_API_KEY`, or set `WHISPER_MODEL=base` in `.env`. |
 
 ---

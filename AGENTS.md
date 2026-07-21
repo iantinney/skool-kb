@@ -70,13 +70,14 @@ Run it end to end, or pass by pass so you can report progress and catch issues e
 ./run.sh transcribe    # Whisper the audio
 ./run.sh clean         # dedupe captions → clean plain text
 ./run.sh index         # build kb/INDEX.md
+./run.sh report        # build kb/MISSING_VIDEOS.md (native videos not in the KB)
 # ...or just: ./run.sh   (all of the above)
 ```
 
 **Known failure modes — handle them, don't panic:**
 - **`Sign in to confirm you're not a bot` (YouTube):** the IP is bot-flagged. This is common on VPS/servers. Fixes, in order: (a) ensure fresh youtube.com cookies are in `cookies.txt`; (b) **recommend running on the user's home computer instead**; (c) as a last resort, a [bgutil PO-token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) — but tell the user it's not guaranteed. Do **not** hammer the endpoint; the polite sleeps are already set.
 - **`Only images are available` / no audio formats (YouTube):** Deno isn't installed or on PATH. Re-run `./bootstrap.sh`; the audio pass already passes `--remote-components ejs:github`.
-- **Native Skool videos not downloaded:** expected. Point the user to [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md) (free per-video method via DevTools + ffmpeg; optional paid extension). Don't promise bulk native download.
+- **Native Skool videos not downloaded:** expected and handled by design. They can't be auto-downloaded (Mux signed HLS). After the run, open **`kb/MISSING_VIDEOS.md`** — it lists every native video by title + URL + id. Tell the user the count, and that each can be added in ~1 minute: play it, capture the `.m3u8` URL from DevTools → Network, then `./add_native.sh "<m3u8 URL>" "Title" <video_id>`. Offer to walk them through one. Don't promise bulk/headless native download; see [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md).
 - **A few Loom/Vimeo failures:** normal (auth/impersonation). Note them and move on.
 
 ### Step 6 — Verify it works

@@ -115,6 +115,11 @@ do_index() {
   python3 build_index.py kb
 }
 
+do_report() {
+  echo "== Reporting native videos not in the KB (kb/MISSING_VIDEOS.md) =="
+  python3 report_missing.py kb
+}
+
 case "${1:-all}" in
   scrape)     do_scrape ;;
   captions)   do_captions ;;
@@ -122,10 +127,15 @@ case "${1:-all}" in
   transcribe) do_transcribe ;;
   clean)      do_clean ;;
   index)      do_index ;;
-  all)        do_scrape; do_captions; do_audio; do_transcribe; do_clean; do_index
+  report)     do_report ;;
+  all)        do_scrape; do_captions; do_audio; do_transcribe; do_clean; do_index; do_report
               echo; echo "== Pipeline complete =="
               echo "Posts:       $(find kb/posts -type f ! -name .gitkeep 2>/dev/null | wc -l) files"
               echo "Transcripts: $(find kb/transcripts -type f ! -name .gitkeep 2>/dev/null | wc -l) files"
+              missing=$(grep -v '^#' native_videos.txt 2>/dev/null | grep -c $'\t' || true)
+              if [ "${missing:-0}" -gt 0 ]; then
+                echo "Native videos NOT in KB: $missing  ->  see kb/MISSING_VIDEOS.md (add with ./add_native.sh)"
+              fi
               echo "Query it:    cd kb && claude   (or: codex)" ;;
-  *) echo "usage: $0 [all|scrape|captions|audio|transcribe|clean|index]"; exit 1 ;;
+  *) echo "usage: $0 [all|scrape|captions|audio|transcribe|clean|index|report]"; exit 1 ;;
 esac

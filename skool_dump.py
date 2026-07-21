@@ -45,7 +45,6 @@ VIDEO_PATTERNS = [
     r"https?://[\w.-]*wistia\.(?:com|net)/(?:medias|embed/(?:iframe|medias))/[A-Za-z0-9]+",
 ]
 VIDEO_RE = re.compile("|".join(f"(?:{p})" for p in VIDEO_PATTERNS))
-NATIVE_RE = re.compile(r"https?://[\w.-]*video\.skool\.com/[^\s\"'\\]+")
 NEXT_DATA_RE = re.compile(
     r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
     re.DOTALL,
@@ -86,6 +85,34 @@ def harvest_text(node, out, current_title=None):
             harvest_text(v, out, current_title)
 
 
+def harvest_native_videos(node, out, groups, page_url):
+    """Find native Skool-hosted videos (posts/lessons whose `videoIds` is set but
+    whose `videoLinksData` is empty — i.e. no external provider URL). Records one
+    entry per native video id with its title and a best-effort source URL, so the
+    user can see exactly which lessons are NOT auto-transcribed. Returns nothing;
+    appends dicts {id, title, url} to `out`."""
+    if isinstance(node, dict):
+        md = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        raw = node.get("videoIds") or md.get("videoIds")
+        # External embeds (YouTube/Loom/…) carry videoLinksData and are handled via
+        # video_urls.txt; only treat as native when there's no external link data.
+        ext = node.get("videoLinksData") or md.get("videoLinksData")
+        if isinstance(raw, str) and raw.strip() and not ext:
+            title = (md.get("title") or node.get("title") or node.get("name") or "(untitled)")
+            title = str(title).strip()[:200]
+            slug = node.get("name") if isinstance(node.get("name"), str) else None
+            grp = next(iter(groups), None)
+            url = f"https://www.skool.com/{grp}/{slug}" if (grp and slug) else page_url
+            for vid in (v.strip() for v in raw.split(",")):
+                if vid:
+                    out.append({"id": vid, "title": title, "url": url})
+        for v in node.values():
+            harvest_native_videos(v, out, groups, page_url)
+    elif isinstance(node, list):
+        for v in node:
+            harvest_native_videos(v, out, groups, page_url)
+
+
 def slugify(url: str) -> str:
     p = urlparse(url)
     slug = (p.path.strip("/") + ("_" + p.query if p.query else "")).replace("/", "_")
@@ -120,8 +147,8 @@ def main():
             queue.extend(f"{u}?p={i}" for i in range(2, args.pages + 1))
 
     seen: set[str] = set()
-    videos: dict[str, str] = {}   # url -> first page it appeared on
-    natives: dict[str, str] = {}
+    videos: dict[str, str] = {}      # external video url -> first page it appeared on
+    natives: dict[str, dict] = {}    # native video id -> {title, url}
     fetched = 0
 
     while queue and fetched < args.max_fetch:
@@ -153,8 +180,10 @@ def main():
 
         for vm in VIDEO_RE.finditer(blob):
             videos.setdefault(vm.group(0), url)
-        for nm in NATIVE_RE.finditer(blob):
-            natives.setdefault(nm.group(0), url)
+        native_hits: list = []
+        harvest_native_videos(data, native_hits, groups, url)
+        for nv in native_hits:
+            natives.setdefault(nv["id"], {"title": nv["title"], "url": nv["url"]})
 
         records: list = []
         harvest_text(data, records)
@@ -195,18 +224,23 @@ def main():
     with open("video_urls.txt", "w") as f:
         for v, src in sorted(videos.items()):
             f.write(f"# from: {src}\n{v}\n")
+    # native_videos.txt: TSV of videos we CANNOT auto-download (id, title, source url).
+    # Consumed by report_missing.py to build kb/MISSING_VIDEOS.md.
     with open("native_videos.txt", "w") as f:
-        for v, src in sorted(natives.items()):
-            f.write(f"# from: {src}\n{v}\n")
+        f.write("# Native Skool-hosted videos (NOT auto-transcribed — signed HLS).\n")
+        f.write("# Columns: video_id\ttitle\tsource_url   (see docs/NATIVE_VIDEOS.md)\n")
+        for vid, meta in sorted(natives.items(), key=lambda kv: kv[1]["title"].lower()):
+            title = meta["title"].replace("\t", " ").replace("\n", " ")
+            f.write(f"{vid}\t{title}\t{meta['url']}\n")
 
     print(f"\nDone. {fetched} pages fetched.")
     print(f"  {len(list(posts_dir.glob('*.md')))} markdown files in {posts_dir}/")
     print(f"  {len(videos)} external video URLs -> video_urls.txt (yt-dlp ready)")
-    print(f"  {len(natives)} native Skool video URLs -> native_videos.txt")
+    print(f"  {len(natives)} native Skool videos -> native_videos.txt (need manual capture)")
     if natives:
-        print("\nNOTE: native Skool videos use short-lived signed HLS tokens. If the URLs in")
-        print("native_videos.txt fail, grab fresh .m3u8?token=... URLs from DevTools > Network")
-        print('while playing, then: yt-dlp --referer "https://www.skool.com/" -o name.mp4 "<m3u8-url>"')
+        print("\nNOTE: native Skool videos are Mux HLS with short-lived signed tokens and")
+        print("cannot be auto-downloaded. After the run, see kb/MISSING_VIDEOS.md for the list")
+        print("and use ./add_native.sh to add any you want (docs/NATIVE_VIDEOS.md).")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ communities.txt
 kb/posts/*
 kb/transcripts/*
 kb/INDEX.md
+kb/MISSING_VIDEOS.md
 !kb/posts/.gitkeep
 !kb/transcripts/.gitkeep
 audio/

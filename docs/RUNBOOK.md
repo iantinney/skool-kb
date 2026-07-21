@@ -92,7 +92,12 @@ Or one pass at a time (useful to watch progress / debug):
 ./run.sh transcribe    # Whisper the audio -> kb/transcripts/*.txt
 ./run.sh clean         # dedupe/clean all captions -> kb/transcripts/*.txt
 ./run.sh index         # build kb/INDEX.md
+./run.sh report        # build kb/MISSING_VIDEOS.md (native videos not in the KB)
 ```
+
+**Native Skool-hosted videos** can't be auto-downloaded (Mux signed HLS). After the run,
+`kb/MISSING_VIDEOS.md` lists exactly which ones aren't in your KB, and you can add any in
+~1 minute with `./add_native.sh` — see [NATIVE_VIDEOS.md](NATIVE_VIDEOS.md).
 
 **What to expect:**
 - `scrape` prints a running count of pages, videos, and native videos found.
@@ -130,7 +135,7 @@ No agent handy? It's just text — `grep -ri "your topic" kb/` works too.
 | `Only images are available` (YouTube) | Deno missing → re-run `./bootstrap.sh`. |
 | Transcription very slow | Add `GROQ_API_KEY`, or set `WHISPER_MODEL=base` in `.env`. |
 | A few Loom/Vimeo failures | Normal (auth/impersonation). |
-| Native Skool videos missing | Expected → [NATIVE_VIDEOS.md](NATIVE_VIDEOS.md). |
+| Native Skool videos missing | Expected → listed in `kb/MISSING_VIDEOS.md`; add with `./add_native.sh` ([NATIVE_VIDEOS.md](NATIVE_VIDEOS.md)). |
 
 ---
 
@@ -148,5 +153,6 @@ skool-kb/
     ├── posts/*.md         #    post/lesson/comment text
     ├── transcripts/*.txt  #    clean video transcripts
     ├── INDEX.md           #    one-line-per-file map
+    ├── MISSING_VIDEOS.md  #    native videos NOT in the KB (+ how to add them)
     └── CLAUDE.md          #    how an agent should answer questions here
 ```

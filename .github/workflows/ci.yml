@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Byte-compile all scripts
-        run: python -m py_compile skool_dump.py transcribe.py srt2txt.py build_index.py
+        run: python -m py_compile skool_dump.py transcribe.py srt2txt.py build_index.py report_missing.py
 
       - name: Install runtime deps
         run: |
@@ -27,13 +27,13 @@ jobs:
 
       - name: Import & CLI-help smoke test
         run: |
-          python -c "import skool_dump, srt2txt, build_index; print('imports OK')"
+          python -c "import skool_dump, srt2txt, build_index, report_missing; print('imports OK')"
           python skool_dump.py --help >/dev/null && echo "skool_dump --help OK"
 
       - name: ShellCheck the shell scripts
         run: |
           sudo apt-get update -qq && sudo apt-get install -y shellcheck
-          shellcheck -e SC1091 run.sh bootstrap.sh
+          shellcheck -e SC1091 run.sh bootstrap.sh add_native.sh
 
       - name: Secret-leak guard (no cookies/keys committed)
         run: |
