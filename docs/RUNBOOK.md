@@ -92,12 +92,15 @@ Or one pass at a time (useful to watch progress / debug):
 ./run.sh transcribe    # Whisper the audio -> kb/transcripts/*.txt
 ./run.sh clean         # dedupe/clean all captions -> kb/transcripts/*.txt
 ./run.sh index         # build kb/INDEX.md
-./run.sh report        # build kb/MISSING_VIDEOS.md (native videos not in the KB)
+./run.sh report        # build kb/VIDEO_REPORT.md + kb/MISSING_VIDEOS.md
 ```
 
-**Native Skool-hosted videos** can't be auto-downloaded (Mux signed HLS). After the run,
-`kb/MISSING_VIDEOS.md` lists exactly which ones aren't in your KB, and you can add any in
-~1 minute with `./add_native.sh` — see [NATIVE_VIDEOS.md](NATIVE_VIDEOS.md).
+**Know exactly what was captured.** `kb/VIDEO_REPORT.md` is the full ledger: how many videos
+made it into the KB vs not, broken down by community, source (feed post / classroom lesson),
+and provider (YouTube / Loom / Vimeo / native Skool), plus an explicit list of everything
+missing. **Native Skool-hosted videos** can't be auto-downloaded (Mux signed HLS); they're
+listed in `kb/MISSING_VIDEOS.md` and you can add any in ~1 minute with `./add_native.sh` — see
+[NATIVE_VIDEOS.md](NATIVE_VIDEOS.md).
 
 **What to expect:**
 - `scrape` prints a running count of pages, videos, and native videos found.
@@ -153,6 +156,7 @@ skool-kb/
     ├── posts/*.md         #    post/lesson/comment text
     ├── transcripts/*.txt  #    clean video transcripts
     ├── INDEX.md           #    one-line-per-file map
+    ├── VIDEO_REPORT.md    #    full video accounting (in KB vs missing, by source)
     ├── MISSING_VIDEOS.md  #    native videos NOT in the KB (+ how to add them)
     └── CLAUDE.md          #    how an agent should answer questions here
 ```

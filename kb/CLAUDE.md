@@ -6,6 +6,8 @@ member of: course-video transcripts plus the text of posts, lessons, and comment
 - `posts/*.md` — post / lesson / comment text. Each file starts with `# Source: <url>`.
 - `transcripts/*.txt` — one file per video; the filename is the video title.
 - `INDEX.md` — one line per file summarizing its topic. Read this first to route a query.
+- `VIDEO_REPORT.md` — the full video accounting: how many videos are in the KB vs missing,
+  by community, source (feed post / classroom lesson), and provider.
 - `MISSING_VIDEOS.md` — native Skool-hosted videos that are **NOT** in this KB (they
   can't be auto-downloaded). Treat this as a known blind spot.
 

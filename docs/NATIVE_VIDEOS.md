@@ -10,15 +10,19 @@ not a bug in this tool.
 ## You always know exactly what's missing
 
 The pipeline detects every native video (by the `videoIds` in each post/lesson), records its
-**title + source URL**, and writes **`kb/MISSING_VIDEOS.md`** — the honest list of native
-videos that are *not* in your knowledge base, with per-item instructions. The run summary also
-prints the count, and the KB's own `CLAUDE.md` tells the querying agent to flag this blind spot
-when a search comes up empty. So nothing is silently dropped — you can see precisely which
-lessons aren't indexed.
+**title + source URL**, and reports it two ways:
 
-Regenerate the report any time:
+- **`kb/VIDEO_REPORT.md`** — the *full* video accounting: how many videos are in the KB vs
+  missing, broken down by community, source (feed post / classroom lesson), and provider.
+- **`kb/MISSING_VIDEOS.md`** — the native videos not in the KB, with per-item add instructions.
+
+The run summary points at both, and the KB's own `CLAUDE.md` tells the querying agent to flag
+this blind spot when a search comes up empty. So nothing is silently dropped — you can see
+precisely which lessons aren't indexed.
+
+Regenerate the reports any time:
 ```bash
-./run.sh report          # or: python3 report_missing.py kb
+./run.sh report          # or: python3 report_videos.py kb
 ```
 
 ## Adding a native video (≈1 minute each, semi-automatic)

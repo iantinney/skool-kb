@@ -15,7 +15,7 @@
 #      right before running the command.
 #
 # The optional [video_id] is the id shown in kb/MISSING_VIDEOS.md; passing it
-# lets report_missing.py mark this video as done on the next refresh.
+# lets report_videos.py mark this video as done on the next refresh.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -57,7 +57,7 @@ echo "== Transcribing =="
 python3 transcribe.py --audio audio --out kb/transcripts
 
 echo "== Refreshing reports =="
-python3 report_missing.py kb || true
+python3 report_videos.py kb || true
 python3 build_index.py kb || true
 
 echo

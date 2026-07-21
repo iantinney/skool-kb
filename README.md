@@ -38,7 +38,7 @@ Prefer to do it by hand? See the [Manual quickstart](#manual-quickstart) and the
 - Grab **free captions** for YouTube/Vimeo videos (no transcription cost or time).
 - **Transcribe** the rest via [Groq Whisper](https://console.groq.com/docs/speech-to-text) (fast, ~$0.04/audio-hour) or **local `faster-whisper`** on CPU (free, slower).
 - Produce a clean, de-duplicated, **plain-text knowledge base** + an `INDEX.md` map.
-- **Tell you exactly what's *not* in the KB** — native Skool videos it can't auto-download are listed by title in `kb/MISSING_VIDEOS.md`, and `./add_native.sh` adds any of them in a minute.
+- **Account for every video** — `kb/VIDEO_REPORT.md` shows how many videos are in the KB vs missing, broken down by community, source (feed post / classroom lesson), and provider. Native videos it can't auto-download are listed by title in `kb/MISSING_VIDEOS.md`, and `./add_native.sh` adds any in a minute.
 - Re-run incrementally: already-downloaded audio and existing transcripts are skipped.
 
 ### ❌ It cannot (be honest with yourself)

@@ -16,8 +16,8 @@ Usage:
 Outputs:
   kb/posts/*.md        — post/lesson text, one file per page
   video_urls.txt       — Loom/YouTube/Vimeo/Wistia links (feed straight to yt-dlp)
-  native_videos.txt    — Skool-hosted (Mux/HLS) videos; these need a signed
-                         token, see notes printed at the end.
+  videos.tsv           — full catalogue of every attached video (external + native
+                         Skool-hosted) with title + source, for report_videos.py.
 """
 
 import argparse
@@ -85,32 +85,71 @@ def harvest_text(node, out, current_title=None):
             harvest_text(v, out, current_title)
 
 
-def harvest_native_videos(node, out, groups, page_url):
-    """Find native Skool-hosted videos (posts/lessons whose `videoIds` is set but
-    whose `videoLinksData` is empty — i.e. no external provider URL). Records one
-    entry per native video id with its title and a best-effort source URL, so the
-    user can see exactly which lessons are NOT auto-transcribed. Returns nothing;
-    appends dicts {id, title, url} to `out`."""
+PROVIDER_HOSTS = (
+    ("youtu", "YouTube"), ("loom.com", "Loom"),
+    ("vimeo", "Vimeo"), ("wistia", "Wistia"),
+)
+
+
+def provider_of(url: str) -> str:
+    u = (url or "").lower()
+    for host, name in PROVIDER_HOSTS:
+        if host in u:
+            return name
+    return "Other"
+
+
+def community_of(url: str) -> str:
+    if "skool.com/" in (url or ""):
+        return url.split("skool.com/")[1].split("/")[0].split("?")[0]
+    return "?"
+
+
+def harvest_videos(node, out, page_url, source_type):
+    """Collect EVERY attached video (external + native) with metadata, for a full
+    accounting of what was found and where. Appends dicts with keys:
+        kind (external|native), provider, id, title, url, source_type, source_url.
+    External videos carry `videoLinksData` (YouTube/Loom/Vimeo/Wistia); native
+    Skool-hosted ones carry a bare `videoIds`. A given post is one or the other.
+    The community/source come from `page_url` (the page actually being scraped) —
+    never guess from a set of all groups, or every video gets one community."""
     if isinstance(node, dict):
         md = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
-        raw = node.get("videoIds") or md.get("videoIds")
-        # External embeds (YouTube/Loom/…) carry videoLinksData and are handled via
-        # video_urls.txt; only treat as native when there's no external link data.
-        ext = node.get("videoLinksData") or md.get("videoLinksData")
-        if isinstance(raw, str) and raw.strip() and not ext:
-            title = (md.get("title") or node.get("title") or node.get("name") or "(untitled)")
-            title = str(title).strip()[:200]
-            slug = node.get("name") if isinstance(node.get("name"), str) else None
-            grp = next(iter(groups), None)
-            url = f"https://www.skool.com/{grp}/{slug}" if (grp and slug) else page_url
-            for vid in (v.strip() for v in raw.split(",")):
-                if vid:
-                    out.append({"id": vid, "title": title, "url": url})
+        title = str(md.get("title") or node.get("title") or node.get("name") or "(untitled)").strip()[:200]
+        slug = node.get("name") if isinstance(node.get("name"), str) else None
+        grp = community_of(page_url)
+        # Classroom lesson pages ARE the lesson URL (…/classroom?md=…); for feed pages
+        # build the direct post URL from the post's slug.
+        if "classroom" in page_url or not (grp and slug):
+            src = page_url
+        else:
+            src = f"https://www.skool.com/{grp}/{slug}"
+        ext = md.get("videoLinksData") or node.get("videoLinksData")
+        if isinstance(ext, str):  # Skool stores this as a JSON-encoded string
+            try:
+                ext = json.loads(ext)
+            except (ValueError, TypeError):
+                ext = None
+        if isinstance(ext, list) and ext:
+            for v in ext:
+                if isinstance(v, dict) and v.get("url"):
+                    out.append({"kind": "external", "provider": provider_of(v["url"]),
+                                "id": (v.get("video_id") or "").strip(),
+                                "title": str(v.get("title") or title).strip()[:200],
+                                "url": v["url"], "source_type": source_type, "source_url": src})
+        else:
+            raw = md.get("videoIds") or node.get("videoIds")
+            if isinstance(raw, str) and raw.strip():
+                for vid in (x.strip() for x in raw.split(",")):
+                    if vid:
+                        out.append({"kind": "native", "provider": "Skool", "id": vid,
+                                    "title": title, "url": "", "source_type": source_type,
+                                    "source_url": src})
         for v in node.values():
-            harvest_native_videos(v, out, groups, page_url)
+            harvest_videos(v, out, page_url, source_type)
     elif isinstance(node, list):
         for v in node:
-            harvest_native_videos(v, out, groups, page_url)
+            harvest_videos(v, out, page_url, source_type)
 
 
 def slugify(url: str) -> str:
@@ -148,7 +187,7 @@ def main():
 
     seen: set[str] = set()
     videos: dict[str, str] = {}      # external video url -> first page it appeared on
-    natives: dict[str, dict] = {}    # native video id -> {title, url}
+    catalog: dict[tuple, dict] = {}  # (kind, id_or_url) -> full video metadata
     fetched = 0
 
     while queue and fetched < args.max_fetch:
@@ -180,10 +219,11 @@ def main():
 
         for vm in VIDEO_RE.finditer(blob):
             videos.setdefault(vm.group(0), url)
-        native_hits: list = []
-        harvest_native_videos(data, native_hits, groups, url)
-        for nv in native_hits:
-            natives.setdefault(nv["id"], {"title": nv["title"], "url": nv["url"]})
+        source_type = "Classroom lesson" if "classroom" in urlparse(url).path else "Feed post"
+        vid_hits: list = []
+        harvest_videos(data, vid_hits, url, source_type)
+        for v in vid_hits:
+            catalog.setdefault((v["kind"], v["id"] or v["url"]), v)
 
         records: list = []
         harvest_text(data, records)
@@ -218,29 +258,36 @@ def main():
                 if cand not in seen:
                     queue.append(cand)
 
-        print(f"[{fetched}] {url}  (queue={len(queue)}, videos={len(videos)}, native={len(natives)})")
+        n_native = sum(1 for k in catalog if k[0] == "native")
+        print(f"[{fetched}] {url}  (queue={len(queue)}, videos={len(catalog)}, native={n_native})")
         time.sleep(args.delay)
 
+    # video_urls.txt — the yt-dlp download feed (external videos only).
     with open("video_urls.txt", "w") as f:
         for v, src in sorted(videos.items()):
             f.write(f"# from: {src}\n{v}\n")
-    # native_videos.txt: TSV of videos we CANNOT auto-download (id, title, source url).
-    # Consumed by report_missing.py to build kb/MISSING_VIDEOS.md.
-    with open("native_videos.txt", "w") as f:
-        f.write("# Native Skool-hosted videos (NOT auto-transcribed — signed HLS).\n")
-        f.write("# Columns: video_id\ttitle\tsource_url   (see docs/NATIVE_VIDEOS.md)\n")
-        for vid, meta in sorted(natives.items(), key=lambda kv: kv[1]["title"].lower()):
-            title = meta["title"].replace("\t", " ").replace("\n", " ")
-            f.write(f"{vid}\t{title}\t{meta['url']}\n")
 
+    # videos.tsv — the full accounting of every attached video (external + native),
+    # with source. Consumed by report_videos.py to build kb/VIDEO_REPORT.md and
+    # kb/MISSING_VIDEOS.md. One row per video.
+    cols = ["kind", "provider", "id", "title", "source_type", "community", "source_url", "url"]
+    with open("videos.tsv", "w", encoding="utf-8") as f:
+        f.write("\t".join(cols) + "\n")
+        for (_, _), v in sorted(catalog.items(),
+                                key=lambda kv: (kv[1]["kind"], kv[1]["provider"], kv[1]["title"].lower())):
+            row = {**v, "community": community_of(v["source_url"])}
+            f.write("\t".join(str(row.get(c, "")).replace("\t", " ").replace("\n", " ") for c in cols) + "\n")
+
+    n_native = sum(1 for k in catalog if k[0] == "native")
+    n_ext = len(catalog) - n_native
     print(f"\nDone. {fetched} pages fetched.")
     print(f"  {len(list(posts_dir.glob('*.md')))} markdown files in {posts_dir}/")
     print(f"  {len(videos)} external video URLs -> video_urls.txt (yt-dlp ready)")
-    print(f"  {len(natives)} native Skool videos -> native_videos.txt (need manual capture)")
-    if natives:
+    print(f"  {len(catalog)} videos catalogued -> videos.tsv ({n_ext} external, {n_native} native)")
+    if n_native:
         print("\nNOTE: native Skool videos are Mux HLS with short-lived signed tokens and")
-        print("cannot be auto-downloaded. After the run, see kb/MISSING_VIDEOS.md for the list")
-        print("and use ./add_native.sh to add any you want (docs/NATIVE_VIDEOS.md).")
+        print("cannot be auto-downloaded. After the run, see kb/VIDEO_REPORT.md for the full")
+        print("accounting and kb/MISSING_VIDEOS.md for the natives to add (docs/NATIVE_VIDEOS.md).")
 
 
 if __name__ == "__main__":
