@@ -7,7 +7,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Agent-ready](https://img.shields.io/badge/agent-ready-8A2BE2.svg)](AGENTS.md)
 
-It scrapes the posts, lessons, and comments from your communities, pulls transcripts for every video (free captions where they exist, Whisper transcription where they don't), and drops it all into a folder of plain-text markdown. Then you point an AI coding agent (Claude Code, Codex, Cursor, …) at that folder and ask real questions:
+It scrapes text from the community pages it reaches, attempts captions or transcription for discovered external videos, and stores a plain-text knowledge base. Native videos currently need a separate import. Then you point an AI coding agent (Claude Code, Codex, Cursor, …) at that folder and ask real questions:
 
 > *"Has anyone covered TikTok Shop affiliate approval timelines?"*
 > → searches the transcripts + posts, reads the hits, and answers **with the source filenames** so you can go straight to the original video or post.
@@ -34,16 +34,18 @@ Prefer to do it by hand? See the [Manual quickstart](#manual-quickstart) and the
 
 ### ✅ It can
 - Scrape **post / lesson / comment text** from communities you're logged into, to markdown.
-- Collect **every video link** (YouTube, Loom, Vimeo, Wistia, and native Skool).
+- Collect discovered video links (YouTube, Loom, Vimeo, Wistia, and native Skool).
 - Grab **free captions** for YouTube/Vimeo videos (no transcription cost or time).
 - **Transcribe** the rest via [Groq Whisper](https://console.groq.com/docs/speech-to-text) (fast, ~$0.04/audio-hour) or **local `faster-whisper`** on CPU (free, slower).
 - Produce a clean, de-duplicated, **plain-text knowledge base** + an `INDEX.md` map.
-- **Account for every video** — `kb/VIDEO_REPORT.md` shows how many videos are in the KB vs missing, broken down by community, source (feed post / classroom lesson), and provider. Native videos it can't auto-download are listed by title in `kb/MISSING_VIDEOS.md`, and `./add_native.sh` adds any in a minute.
+- **Account for discovered videos** — `kb/VIDEO_REPORT.md` shows readable transcripts vs missing text, broken down by community, source, and provider. `kb/CRAWL_REPORT.json` records failed requests, pending pages, inaccessible modules, and crawl limits. Native videos needing import appear in `kb/MISSING_VIDEOS.md`.
 - Re-run incrementally: already-downloaded audio and existing transcripts are skipped.
 
 ### ❌ It cannot (be honest with yourself)
 - **Access content you're not a member of.** It uses *your* logged-in session. It is not a way around paywalls or private communities you haven't joined.
-- **Auto-download native Skool-hosted videos.** Skool serves those via [Mux](https://www.mux.com/case-studies/skool) HLS with short-lived signed tokens, so they can't be grabbed headless. But you're never left guessing: every one is listed by title in **`kb/MISSING_VIDEOS.md`**, and **`./add_native.sh`** adds any of them in ~1 minute from a browser-captured URL. See [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md).
+- **Auto-download native Skool-hosted videos in this pipeline.** Discovered native videos appear in **`kb/MISSING_VIDEOS.md`**; **`./add_native.sh`** accepts an authorized stream URL. See [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md).
+- **Prove a complete account backup.** It does not discover all your memberships. Feed pagination is bounded; comments and other lazy-loaded content may be absent. Review failed/pending pages and compare the lesson inventory against Skool before cancelling access.
+- **Archive playable videos.** The default pipeline saves captions and/or audio for a text KB, not full video files. A transcript can omit on-screen demonstrations and attachments; keep a separate media backup if you need those.
 - **Guarantee YouTube downloads from a cloud server / VPS.** As of 2026, YouTube aggressively bot-checks datacenter IPs ("Sign in to confirm you're not a bot"). Logged-in cookies help but are **not a guaranteed bypass**. **Run this on your own computer (residential IP) for best results.** See [Troubleshooting](#troubleshooting).
 - **Bypass Skool's Terms.** This is for personal use of content you legitimately have access to. See [Legal & ethics](#legal--ethics).
 
@@ -60,7 +62,7 @@ cookies.txt ─────┼─▶ scrape __NEXT_DATA__ ─▶ captions + audi
                                                                                           kb/ ─▶ cd kb && claude
 ```
 
-Skool is a Next.js app, so every page embeds its full data as JSON in a `__NEXT_DATA__` blob. `skool_dump.py` walks that JSON generically (it doesn't assume a schema, so it degrades gracefully if Skool changes shape), writing post/lesson text to `kb/posts/*.md` and every video URL to `video_urls.txt` / `native_videos.txt`.
+`skool_dump.py` reads the `__NEXT_DATA__` JSON served with a page. Classroom discovery follows course paths and accessible lesson ids; lesson text includes Skool's `[v2]` rich-text descriptions. Other text is collected recursively. Pages do not necessarily contain every comment or lesson, so a successful HTTP request alone does not establish completeness. Output includes `kb/posts/*.md`, `video_urls.txt`, and `videos.tsv`.
 
 `run.sh` orchestrates the passes: **scrape → captions → audio → transcribe → clean → index → report**. Each is also runnable on its own (`./run.sh <step>`).
 
@@ -89,7 +91,7 @@ Build it, then query it:
 cd kb && claude                    # or: codex  — then ask your questions
 ```
 
-Everything is resumable — re-run `./run.sh` any time to pick up new content in minutes.
+Re-runs preserve previously discovered video entries and skip readable transcripts. Blank or punctuation-only transcription results remain missing; short speech and non-Latin text are accepted. Text presence alone does not verify transcript quality or duration coverage. A failed request or exhausted fetch budget returns a nonzero status; inspect `kb/CRAWL_REPORT.json` and rerun the needed pass. `PAGES=100 MAX_FETCH=0 ./run.sh scrape` raises the feed-page limit and disables the fetch cap; this can take a long time and still does not prove all content was discovered.
 
 ---
 

@@ -28,6 +28,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from video_utils import has_text_content, has_transcript_text
+
 AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".webm", ".opus", ".ogg", ".mp4", ".mkv"}
 GROQ_MAX_BYTES = 24 * 1024 * 1024  # stay under Groq's 25MB request cap
 
@@ -39,13 +41,8 @@ def find_audio(audio_dir: Path):
 
 def already_done(out_dir: Path, stem: str) -> bool:
     # A caption grab (.srt/.vtt) or a prior run (.txt) both count as "done".
-    return any(out_dir.glob(f"{glob_escape(stem)}*.txt")) or \
-           any(out_dir.glob(f"{glob_escape(stem)}*.srt")) or \
-           any(out_dir.glob(f"{glob_escape(stem)}*.vtt"))
-
-
-def glob_escape(s: str) -> str:
-    return s.replace("[", "[[]")
+    return any((path.stem == stem or path.stem.startswith(stem + "."))
+               and has_transcript_text(path) for path in out_dir.iterdir())
 
 
 def duration_seconds(path: Path) -> float:
@@ -144,6 +141,8 @@ def main():
         try:
             text = (groq_transcribe(path, api_key) if api_key
                     else fw_transcribe(path, model_name))
+            if not has_text_content(text):
+                raise ValueError("Transcription returned no readable text; audio retained for retry")
         except Exception as e:
             print(f"    ERROR: {e}", file=sys.stderr)
             failed += 1
@@ -153,7 +152,8 @@ def main():
 
     print(f"\nDone. {done} transcribed, {skipped} skipped (already had text/captions), {failed} failed.")
     print(f"Transcripts in {out_dir}/")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

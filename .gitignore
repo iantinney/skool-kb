@@ -15,6 +15,7 @@ kb/transcripts/*
 kb/INDEX.md
 kb/MISSING_VIDEOS.md
 kb/VIDEO_REPORT.md
+kb/CRAWL_REPORT.json
 !kb/posts/.gitkeep
 !kb/transcripts/.gitkeep
 audio/

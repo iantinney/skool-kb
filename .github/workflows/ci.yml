@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Byte-compile all scripts
-        run: python -m py_compile skool_dump.py transcribe.py srt2txt.py build_index.py report_videos.py
+        run: python -m py_compile skool_dump.py transcribe.py srt2txt.py build_index.py report_videos.py video_utils.py
 
       - name: Install runtime deps
         run: |
@@ -29,6 +29,9 @@ jobs:
         run: |
           python -c "import skool_dump, srt2txt, build_index, report_videos; print('imports OK')"
           python skool_dump.py --help >/dev/null && echo "skool_dump --help OK"
+
+      - name: Offline regression tests
+        run: python -m unittest discover -s tests -v
 
       - name: ShellCheck the shell scripts
         run: |
