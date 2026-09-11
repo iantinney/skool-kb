@@ -95,12 +95,14 @@ Or one pass at a time (useful to watch progress / debug):
 ./run.sh report        # build kb/VIDEO_REPORT.md + kb/MISSING_VIDEOS.md
 ```
 
-**Know exactly what was captured.** `kb/VIDEO_REPORT.md` is the full ledger: how many videos
+**Review what was captured.** `kb/VIDEO_REPORT.md` is the full ledger: how many videos
 made it into the KB vs not, broken down by community, source (feed post / classroom lesson),
 and provider (YouTube / Loom / Vimeo / native Skool), plus an explicit list of everything
-missing. **Native Skool-hosted videos** can't be auto-downloaded (Mux signed HLS); they're
+missing. **Native Skool-hosted videos** need a separate import in this pipeline; they're
 listed in `kb/MISSING_VIDEOS.md` and you can add any in ~1 minute with `./add_native.sh` — see
 [NATIVE_VIDEOS.md](NATIVE_VIDEOS.md).
+
+Inspect `kb/CRAWL_REPORT.json` after scraping. Failed requests or a reached fetch cap return nonzero; the prior video catalogue is retained with `seen_in_latest_crawl=false` for historical entries. Counts are limited to discovered videos. The default pipeline saves text and audio, not full playable videos; compare the lesson inventory and media backup with Skool before cancelling access.
 
 **What to expect:**
 - `scrape` prints a running count of pages, videos, and native videos found.
@@ -150,12 +152,13 @@ skool-kb/
 ├── cookies.txt            # your input: session (gitignored)
 ├── .env                   # your input: optional GROQ_API_KEY (gitignored)
 ├── video_urls.txt         # external video links found (gitignored)
-├── native_videos.txt      # native Skool videos found (gitignored)
+├── videos.tsv            # discovered video catalogue (gitignored)
 ├── audio/                 # downloaded audio, pre-transcription (gitignored)
 └── kb/                    # ← the knowledge base you query
     ├── posts/*.md         #    post/lesson/comment text
     ├── transcripts/*.txt  #    clean video transcripts
     ├── INDEX.md           #    one-line-per-file map
+    ├── CRAWL_REPORT.json  #    failed/pending pages and crawl limits
     ├── VIDEO_REPORT.md    #    full video accounting (in KB vs missing, by source)
     ├── MISSING_VIDEOS.md  #    native videos NOT in the KB (+ how to add them)
     └── CLAUDE.md          #    how an agent should answer questions here

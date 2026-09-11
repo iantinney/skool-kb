@@ -77,10 +77,12 @@ Run it end to end, or pass by pass so you can report progress and catch issues e
 **Known failure modes — handle them, don't panic:**
 - **`Sign in to confirm you're not a bot` (YouTube):** the IP is bot-flagged. This is common on VPS/servers. Fixes, in order: (a) ensure fresh youtube.com cookies are in `cookies.txt`; (b) **recommend running on the user's home computer instead**; (c) as a last resort, a [bgutil PO-token provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) — but tell the user it's not guaranteed. Do **not** hammer the endpoint; the polite sleeps are already set.
 - **`Only images are available` / no audio formats (YouTube):** Deno isn't installed or on PATH. Re-run `./bootstrap.sh`; the audio pass already passes `--remote-components ejs:github`.
-- **Native Skool videos not downloaded:** expected and handled by design. They can't be auto-downloaded (Mux signed HLS). After the run, open **`kb/MISSING_VIDEOS.md`** — it lists every native video by title + URL + id. Tell the user the count, and that each can be added in ~1 minute: play it, capture the `.m3u8` URL from DevTools → Network, then `./add_native.sh "<m3u8 URL>" "Title" <video_id>`. Offer to walk them through one. Don't promise bulk/headless native download; see [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md).
+- **Native Skool videos not downloaded:** expected and handled by design. This pipeline does not automate their download. After the run, open **`kb/MISSING_VIDEOS.md`** — it lists discovered native videos by title + URL + id. Tell the user the count, and explain the stream import workflow: play it, capture the `.m3u8` URL from DevTools → Network, then `./add_native.sh "<m3u8 URL>" "Title" <video_id>`. Offer to walk them through one. Don't promise bulk/headless native download; see [docs/NATIVE_VIDEOS.md](docs/NATIVE_VIDEOS.md).
 - **A few Loom/Vimeo failures:** normal (auth/impersonation). Note them and move on.
 
 ### Step 6 — Verify it works
+Inspect `kb/CRAWL_REPORT.json` for failed/pending pages and inaccessible modules. A completed queue does not prove every feed page or comment was discovered. `kb/VIDEO_REPORT.md` counts readable transcripts for discovered videos only; it does not establish a complete account or playable-video backup. Never advise cancelling access based on these counts alone.
+
 After the run, prove the KB answers questions. From `kb/`, run a real query and confirm it cites filenames:
 ```bash
 cd kb && claude -p "Using only these files, what topics are covered? Cite 3 filenames."
@@ -98,6 +100,6 @@ Then tell the user how they'll use it day to day: `cd kb && claude` (or `codex`)
 - Groq keys: https://console.groq.com/keys · models: `whisper-large-v3-turbo`, `whisper-large-v3`
 - Deno install (bootstrap handles it): `curl -fsSL https://deno.land/install.sh | sh`
 - yt-dlp YouTube JS runtime / EJS: https://github.com/yt-dlp/yt-dlp/wiki/EJS
-- Native Skool video is Mux HLS with signed tokens (per-video download only)
+- Native Skool video uses signed playback; the current importer accepts one authorized stream URL at a time.
 
 **Never do:** commit `cookies.txt`/`.env`; push the user's `kb/` content; recommend the deprecated non-"LOCALLY" cookie extension; promise a YouTube bot-check bypass on a VPS; or claim bulk native-video download works.

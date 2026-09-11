@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # add_native.sh — add ONE native Skool-hosted video to your knowledge base.
 #
-# Native Skool videos are Mux HLS streams behind short-lived signed tokens, so
-# they can't be auto-downloaded. You capture the stream URL from your browser
+# This importer accepts an authorized native Skool HLS stream URL.
+# You capture the stream URL from your browser
 # once (DevTools), and this script does the rest: download -> extract audio ->
 # transcribe -> drop the transcript into kb/transcripts/.
 #
@@ -55,6 +55,10 @@ fi
 
 echo "== Transcribing =="
 python3 transcribe.py --audio audio --out kb/transcripts
+if [ ! -s "kb/transcripts/${base}.txt" ]; then
+  echo "!! No transcript was produced for '$TITLE'. Audio is retained for retry."
+  exit 1
+fi
 
 echo "== Refreshing reports =="
 python3 report_videos.py kb || true

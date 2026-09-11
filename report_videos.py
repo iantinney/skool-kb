@@ -13,26 +13,22 @@ into the KB. Writes two reports:
                           per-item steps to add them via ./add_native.sh.
 
 A video counts as "in the KB" if a transcript file in kb/transcripts/ contains
-its id (that's how captions and add_native.sh name their output).
+its exact [id] suffix and contains readable text.
 
 Usage:  python3 report_videos.py [kb_dir]   (default: kb)
 """
-import re
+import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+from video_utils import id_of, transcript_ids
 
 TSV = Path("videos.tsv")
 FEED = Path("video_urls.txt")
 
 PROVIDER_HOSTS = (("youtu", "YouTube"), ("loom.com", "Loom"),
                   ("vimeo", "Vimeo"), ("wistia", "Wistia"))
-ID_PATTERNS = (
-    r"(?:v=|youtu\.be/|embed/)([\w-]{11})",         # YouTube
-    r"loom\.com/(?:share|embed)/([A-Za-z0-9]+)",    # Loom
-    r"vimeo\.com/(?:video/)?(\d+)",                  # Vimeo
-    r"wistia\.[a-z]+/(?:medias|iframe)/([A-Za-z0-9]+)",  # Wistia
-)
 
 
 def provider_of(url):
@@ -45,14 +41,6 @@ def provider_of(url):
 
 def community_of(url):
     return url.split("skool.com/")[1].split("/")[0].split("?")[0] if "skool.com/" in (url or "") else "?"
-
-
-def id_of(url):
-    for pat in ID_PATTERNS:
-        m = re.search(pat, url)
-        if m:
-            return m.group(1)
-    return ""
 
 
 def load_tsv():
@@ -89,16 +77,16 @@ def load_videos():
     """Unify the external download feed (video_urls.txt) with structured metadata
     (videos.tsv). External universe = what we tried to download; native = videos.tsv."""
     tsv = load_tsv()
-    by_id = {r["id"]: r for r in tsv if r.get("id")}
+    by_id = {(r.get("provider"), r["id"]): r for r in tsv if r.get("id")}
 
     videos, seen = [], set()
     for url, page in load_external_feed():
         vid = id_of(url)
-        dedup_key = vid or url
+        dedup_key = (provider_of(url), vid or url)
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
-        meta = by_id.get(vid, {})
+        meta = by_id.get((provider_of(url), vid), {})
         stype = meta.get("source_type") or ("Classroom lesson" if "classroom" in page else "Feed post")
         videos.append({
             "kind": "external",
@@ -109,10 +97,16 @@ def load_videos():
             "source_type": stype,
             "community": meta.get("community") or community_of(page or url),
             "source_url": meta.get("source_url") or page,
+            "seen_in_latest_crawl": meta.get("seen_in_latest_crawl", "unknown"),
         })
     for r in tsv:
         if r.get("kind") == "native":
             videos.append(r)
+        elif r.get("kind") == "external":
+            key = (r.get("provider") or provider_of(r.get("url")), r.get("id") or id_of(r.get("url")) or r.get("url"))
+            if key not in seen:
+                seen.add(key)
+                videos.append({**r, "id": r.get("id") or id_of(r.get("url"))})
     return videos
 
 
@@ -122,10 +116,15 @@ def main():
     kb.mkdir(parents=True, exist_ok=True)
 
     videos = load_videos()
-    names = " ".join(p.name for p in tdir.glob("*")) if tdir.is_dir() else ""
+    completed = transcript_ids(tdir)
+    crawl_path = kb / "CRAWL_REPORT.json"
+    try:
+        crawl = json.loads(crawl_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        crawl = None
 
     for v in videos:
-        v["in_kb"] = bool(v.get("id")) and v["id"] in names
+        v["in_kb"] = bool(v.get("id")) and v["id"] in completed
 
     total = len(videos)
     in_kb = [v for v in videos if v["in_kb"]]
@@ -149,10 +148,25 @@ def main():
         pct = (100 * len(in_kb) // total) if total else 0
         L.append(f"**{len(in_kb)} of {total} videos are in the knowledge base ({pct}%).** "
                  f"{len(missing)} are not: {len(missing_ext)} external (download/transcription "
-                 f"failed) and {len(missing_nat)} native Skool videos (can't be auto-downloaded).")
+                 f"pending or failed) and {len(missing_nat)} native Skool videos.")
         L.append("")
-        L.append("A video is \"in the KB\" if it has a transcript in `transcripts/` "
-                 "(from captions, Whisper, or `./add_native.sh`).")
+        L.append("A video is \"in the KB\" if it has readable transcript text in `transcripts/` "
+                 "with its exact `[video_id]` filename suffix. This checks text presence, "
+                 "not transcript completeness, accuracy, or a playable video backup.")
+        L.append("")
+        if crawl:
+            L.append(f"Latest crawl: **{len(crawl.get('successful_pages', []))} successful pages, "
+                     f"{len(crawl.get('failed_pages', []))} failed, {len(crawl.get('pending_pages', []))} pending**. "
+                     "See `CRAWL_REPORT.json` for URLs and limits. The catalogue is cumulative.")
+        else:
+            L.append("**Crawl coverage is unknown:** no valid `CRAWL_REPORT.json` was found.")
+        L.append("**These totals cover discovered videos only; they do not prove every course, lesson, "
+                 "feed post, or comment has been captured.**")
+        historical = sum(v.get("seen_in_latest_crawl") == "false" for v in videos)
+        if historical:
+            L.append(f"{historical} catalogue entries were retained from earlier runs and were not "
+                     "seen in the latest crawl; their current accessibility is unverified. "
+                     "The `seen_in_latest_crawl` column in `videos.tsv` distinguishes them.")
         L.append("")
         L.append("## Breakdown by community, source, and provider")
         L.append("")
@@ -181,8 +195,8 @@ def main():
         if missing_nat:
             L.append(f"## ❌ Native Skool videos NOT in the KB ({len(missing_nat)})")
             L.append("")
-            L.append("Native Skool videos are Mux HLS with signed tokens and can't be "
-                     "auto-downloaded. Add any of them with `./add_native.sh` — the full "
+            L.append("Native Skool downloads are not automated by this pipeline. "
+                     "Add them with `./add_native.sh` — the full "
                      "list with instructions is in [MISSING_VIDEOS.md](MISSING_VIDEOS.md).")
             L.append("")
 
@@ -194,7 +208,7 @@ def main():
         L.append("<sub>Counts cover videos found on the pages the scraper reached. Classroom "
                  "crawling is best-effort, so re-running `./run.sh scrape` may surface a few "
                  "more lessons. \"In KB\" is determined by matching each video's id to a "
-                 "transcript filename.</sub>")
+                 "readable transcript's exact `[id]` filename suffix.</sub>")
         (kb / "VIDEO_REPORT.md").write_text("\n".join(L) + "\n", encoding="utf-8")
 
     # ---- kb/MISSING_VIDEOS.md (native, drives add_native.sh) ----
@@ -210,8 +224,9 @@ def write_missing_natives(kb, missing_nat, total_native):
     out = kb / "MISSING_VIDEOS.md"
     if total_native == 0:
         out.write_text(
-            "# Missing videos\n\nNo native Skool-hosted videos were found — everything "
-            "is external (YouTube/Loom/Vimeo) and handled automatically. ✅\n",
+            "# Missing videos\n\nNo native Skool-hosted videos were catalogued. "
+            "This does not establish crawl completeness or successful external downloads; "
+            "see VIDEO_REPORT.md and CRAWL_REPORT.json.\n",
             encoding="utf-8")
         return
     added = total_native - len(missing_nat)
@@ -219,9 +234,8 @@ def write_missing_natives(kb, missing_nat, total_native):
     L.append(f"**{len(missing_nat)} of {total_native} native videos are NOT transcribed** "
              f"({added} added manually so far).")
     L.append("")
-    L.append("Native Skool videos are Mux HLS streams protected by short-lived signed "
-             "tokens, so — unlike YouTube/Loom/Vimeo — they can't be downloaded "
-             "automatically. This page is the honest list of what's missing and how to "
+    L.append("Native Skool downloads are not automated by this pipeline. "
+             "This page lists what's missing and how to "
              "fill it. (See kb/VIDEO_REPORT.md for the full video accounting.)")
     L.append("")
     L.append("## How to add one (≈1 minute each)")

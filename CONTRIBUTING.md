@@ -31,6 +31,6 @@ cd skool-kb
 ## Pull requests
 - Keep PRs focused and describe what you changed and why.
 - If you touched a script, show a quick before/after or sample output in the PR.
-- The CI runs a lint + import smoke test; make sure it's green.
+- Run `python -m unittest discover -s tests -v` and `shellcheck -e SC1091 run.sh bootstrap.sh add_native.sh`. Tests use synthetic fixtures without live accounts or transcription APIs; CI also compiles/imports scripts and checks for tracked secrets.
 
 By contributing, you agree your contributions are licensed under the [MIT License](LICENSE).

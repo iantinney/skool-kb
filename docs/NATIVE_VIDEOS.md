@@ -1,72 +1,36 @@
-# Native Skool-hosted videos (the one thing that isn't fully automatic)
+# Native Skool-hosted videos
 
-Skool hosts its own videos on [**Mux**](https://www.mux.com/case-studies/skool), delivered as
-**HLS (`.m3u8`) streams protected by short-lived signed tokens**, minted on demand by Skool's
-backend when their player asks for them. There is **no dedicated yt-dlp extractor** for Skool,
-and the stream URL isn't in the page (only a thumbnail is), so — unlike YouTube/Loom/Vimeo —
-native videos **cannot be downloaded automatically**. This is a real, documented limitation,
-not a bug in this tool.
+The current pipeline discovers native video ids and reports missing transcripts. It
+does not automate playback-token retrieval. `add_native.sh` imports one authorized
+HLS stream URL captured from your logged-in browser. Browser automation may also
+obtain authorized playback data, but that integration is not included here.
 
-## You always know exactly what's missing
+## Check discovered-video coverage
 
-The pipeline detects every native video (by the `videoIds` in each post/lesson), records its
-**title + source URL**, and reports it two ways:
+- `kb/VIDEO_REPORT.md` compares discovered video ids with readable transcripts.
+- `kb/MISSING_VIDEOS.md` lists discovered native videos without transcripts.
+- `kb/CRAWL_REPORT.json` records failed requests, pending pages, inaccessible modules,
+  and configured crawl limits.
 
-- **`kb/VIDEO_REPORT.md`** — the *full* video accounting: how many videos are in the KB vs
-  missing, broken down by community, source (feed post / classroom lesson), and provider.
-- **`kb/MISSING_VIDEOS.md`** — the native videos not in the KB, with per-item add instructions.
+These reports do not prove that every lesson or video was discovered. A transcript
+does not constitute a playable video backup or preserve on-screen demonstrations.
 
-The run summary points at both, and the KB's own `CLAUDE.md` tells the querying agent to flag
-this blind spot when a search comes up empty. So nothing is silently dropped — you can see
-precisely which lessons aren't indexed.
+## Import an authorized stream
 
-Regenerate the reports any time:
-```bash
-./run.sh report          # or: python3 report_videos.py kb
-```
+1. Open the lesson/post in your logged-in browser and play the video.
+2. In **DevTools → Network**, filter for **m3u8** and copy the playback request URL.
+3. Run the command below promptly because signed URLs expire. Use the video id from
+   `kb/MISSING_VIDEOS.md` so the report can match the resulting transcript.
 
-## Adding a native video (≈1 minute each, semi-automatic)
-
-The only manual part is capturing the stream URL from your browser (the signed token can't be
-obtained headless). After that, one command does download → audio → transcript → into the KB.
-
-1. Open the lesson/post in your browser and **start playing** the video.
-2. Open **DevTools (F12) → Network**, filter for **`m3u8`**, and copy the request URL — it
-   looks like `…/….m3u8?token=…`. (Tokens expire in minutes; copy it right before step 3.)
-3. From the project root:
    ```bash
-   ./add_native.sh "<paste the m3u8 URL>" "Video Title" <video_id>
+   ./add_native.sh "<authorized m3u8 URL>" "Video Title" <video_id>
    ```
-   The `<video_id>` is shown next to each item in `kb/MISSING_VIDEOS.md`; passing it lets the
-   report mark this video as done on the next refresh.
-4. Done — the transcript lands in `kb/transcripts/` and `MISSING_VIDEOS.md` updates.
 
-`add_native.sh` uses `yt-dlp`/`ffmpeg` with the required `Referer: https://www.skool.com/`
-header, extracts 48 kbps mono audio, and runs it through the same transcription backend as the
-rest of the pipeline (Groq if `GROQ_API_KEY` is set, else local Whisper).
+The importer asks yt-dlp to extract audio, runs the configured transcription backend,
+and refreshes the index and reports. It returns a failure if no transcript is produced.
+It does not save the full visual video. Browser/session or CDN restrictions may still
+prevent yt-dlp from fetching a stream; inspect the actual error and keep the missing
+item visible in the report.
 
-## Bulk option: a paid browser extension (not free / not open-source)
-
-If you have *many* native videos and value time over a few dollars, there's a maintained
-commercial extension, **"Downloader for Skool"** by SERP Apps
-([github.com/serpapps/skool-downloader](https://github.com/serpapps/skool-downloader), also on
-the Chrome Web Store), that automates the token capture and bulk-downloads to MP4. Fair-warning
-so you decide with eyes open: it's **proprietary and freemium** (~3 free downloads, then paid),
-and its GitHub repo is mostly marketing/distribution rather than auditable source. After
-downloading, drop the audio into `audio/` and run `./run.sh transcribe`.
-
-## Why not just automate the token?
-
-We looked into it and decided against it, on purpose:
-- The stream uses **Mux signed playback** — a direct request returns `Not Authorized` (403).
-- The thumbnail token Skool ships in the page is scoped to thumbnails (`aud: "t"`), not video.
-- A playback token (`aud: "v"`) is generated by Skool's WAF-protected backend for the player.
-  Replaying that flow headless is fragile, breaks whenever Skool changes it, and edges into
-  circumventing access controls — so this tool doesn't do it. The browser-capture step above is
-  the honest, stable, legitimate path (you're downloading your own paid content).
-
-## Reality check
-
-If your communities are mostly text + YouTube/Loom/Vimeo, native videos may be a small slice —
-check `kb/MISSING_VIDEOS.md` to see the actual number before spending time on it. Everything
-else is already captured automatically.
+Keep cookies and signed playback URLs private. Use only playback access already
+authorized for your own account.

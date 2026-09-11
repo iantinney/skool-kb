@@ -22,6 +22,7 @@ VENV=.venv
 COOKIES=cookies.txt
 COMMUNITIES=communities.txt
 PAGES=${PAGES:-30}
+MAX_FETCH=${MAX_FETCH:-400}
 
 [ -d "$VENV" ] && source "$VENV/bin/activate"
 [ -f .env ] && set -a && source .env && set +a          # GROQ_API_KEY, etc.
@@ -34,7 +35,7 @@ die() { echo "!! $*" >&2; exit 1; }
 load_urls() {
   [ -s "$COMMUNITIES" ] || die "Missing $COMMUNITIES — copy communities.example.txt to communities.txt and add your community URLs."
   SKOOL_URLS=()   # NB: never name this GROUPS — that is a reserved bash builtin (user's GIDs).
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     line="${line%%#*}"; line="$(echo "$line" | xargs)"   # strip comments + whitespace
     [ -z "$line" ] && continue
     line="${line%/}"
@@ -50,7 +51,7 @@ need_cookies() {
 do_scrape() {
   need_cookies; load_urls
   echo "== Scraping Skool posts + collecting video URLs =="
-  python3 skool_dump.py --cookies "$COOKIES" --out kb --pages "$PAGES" "${SKOOL_URLS[@]}"
+  python3 skool_dump.py --cookies "$COOKIES" --out kb --pages "$PAGES" --max-fetch "$MAX_FETCH" "${SKOOL_URLS[@]}"
 }
 
 do_captions() {
@@ -66,7 +67,7 @@ do_captions() {
   # Drop the redundant en-orig track when a plain en track exists.
   for f in kb/transcripts/*.en-orig.srt; do
     [ -e "$f" ] || continue
-    [ -e "${f%.en-orig.srt}.en.srt" ] && rm -f "$f"
+    if [ -e "${f%.en-orig.srt}.en.srt" ]; then rm -f "$f"; fi
   done
 }
 
@@ -78,12 +79,7 @@ do_audio() {
   # the video id from the URL locally (no extra network probes) and skip it if a
   # transcript file already carries that id in its "[id]" suffix.
   local need; need="$(mktemp)"
-  while read -r url; do
-    case "$url" in \#*|"") continue;; esac
-    id=$(printf '%s\n' "$url" | grep -oE '[A-Za-z0-9_-]{11}$|[A-Za-z0-9_-]{11}(&|$)|/[0-9]+$|[A-Za-z0-9]+$' | head -1 | tr -d '/&')
-    if [ -n "$id" ] && ls kb/transcripts/*"$id"* >/dev/null 2>&1; then continue; fi
-    echo "$url" >> "$need"
-  done < video_urls.txt
+  python3 video_utils.py kb/transcripts video_urls.txt > "$need"
   n=$(grep -c . "$need" || true)
   echo "   ${n:-0} video(s) lack captions -> downloading audio"
   if [ "${n:-0}" -gt 0 ]; then
@@ -129,7 +125,7 @@ case "${1:-all}" in
   index)      do_index ;;
   report)     do_report ;;
   all)        do_scrape; do_captions; do_audio; do_transcribe; do_clean; do_index; do_report
-              echo; echo "== Pipeline complete =="
+              echo; echo "== Pipeline passes finished; review coverage and missing videos below =="
               echo "Posts:       $(find kb/posts -type f ! -name .gitkeep 2>/dev/null | wc -l) files"
               echo "Transcripts: $(find kb/transcripts -type f ! -name .gitkeep 2>/dev/null | wc -l) files"
               echo "Video ledger: kb/VIDEO_REPORT.md  (what's in the KB and what's missing, by source)"

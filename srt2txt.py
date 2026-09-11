@@ -14,7 +14,7 @@ import re
 import sys
 from pathlib import Path
 
-TS = re.compile(r"\d{1,2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*")
+TS = re.compile(r"(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3}\s*-->\s*")
 TAG = re.compile(r"<[^>]+>")           # <c>, <00:00:00.000> inline timing tags
 CUENUM = re.compile(r"^\d+$")
 
