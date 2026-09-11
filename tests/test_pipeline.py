@@ -71,6 +71,15 @@ class VideoTests(unittest.TestCase):
             (directory / "A [no_text].vtt").write_text("WEBVTT\n\n00:00.000 --> 00:01.000\n")
             self.assertEqual(transcript_ids(directory), {"1234", "caption"})
 
+    def test_punctuation_only_is_missing_but_short_unicode_speech_counts(self):
+        with workspace() as directory:
+            (directory / "Punctuation [dot].txt").write_text(". … !")
+            (directory / "Punctuation [caption].srt").write_text("1\n00:00:01,000 --> 00:00:02,000\n...\n")
+            for identity, text in (("short", "Yes."), ("unicode", "你好。"), ("number", "7")):
+                (directory / f"Speech [{identity}].txt").write_text(text)
+            self.assertEqual(transcript_ids(directory), {"short", "unicode", "number"})
+            self.assertFalse(transcribe.already_done(directory, "Punctuation [dot]"))
+
     def test_ledger_entries_not_in_download_feed_remain_visible(self):
         with workspace():
             Path("videos.tsv").write_text("kind\tprovider\tid\ttitle\turl\nexternal\tWistia\tabc123\tExample\thttps://fast.wistia.net/embed/iframe/abc123\n")
@@ -222,7 +231,7 @@ class TranscriptionTests(unittest.TestCase):
             self.assertTrue(transcribe.already_done(directory, "Lesson [123]"))
 
     def test_failed_or_empty_transcription_does_not_claim_success(self):
-        for outcome in ("", RuntimeError("synthetic backend failure")):
+        for outcome in ("", ".", "… !", RuntimeError("synthetic backend failure")):
             with self.subTest(outcome=str(outcome)), workspace():
                 Path("audio").mkdir()
                 Path("audio/Lesson [id].m4a").write_bytes(b"synthetic audio")

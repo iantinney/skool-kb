@@ -28,7 +28,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from video_utils import has_transcript_text
+from video_utils import has_text_content, has_transcript_text
 
 AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".webm", ".opus", ".ogg", ".mp4", ".mkv"}
 GROQ_MAX_BYTES = 24 * 1024 * 1024  # stay under Groq's 25MB request cap
@@ -141,8 +141,8 @@ def main():
         try:
             text = (groq_transcribe(path, api_key) if api_key
                     else fw_transcribe(path, model_name))
-            if not text.strip():
-                raise ValueError("Transcription returned no text; audio retained for retry")
+            if not has_text_content(text):
+                raise ValueError("Transcription returned no readable text; audio retained for retry")
         except Exception as e:
             print(f"    ERROR: {e}", file=sys.stderr)
             failed += 1

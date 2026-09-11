@@ -18,11 +18,16 @@ def id_of(url):
     return ""
 
 
+def has_text_content(text):
+    """Require a Unicode letter or number; punctuation alone is not transcript text."""
+    return any(character.isalnum() for character in text)
+
+
 def has_transcript_text(path):
     if not path.is_file() or path.suffix.lower() not in {".txt", ".srt", ".vtt"}:
         return False
     text = clean(path) if path.suffix.lower() != ".txt" else path.read_text(encoding="utf-8", errors="ignore")
-    return bool(text.strip())
+    return has_text_content(text)
 
 
 def transcript_ids(directory):

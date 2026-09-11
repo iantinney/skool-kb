@@ -91,7 +91,7 @@ Build it, then query it:
 cd kb && claude                    # or: codex  — then ask your questions
 ```
 
-Re-runs preserve previously discovered video entries and skip readable transcripts. A failed request or exhausted fetch budget returns a nonzero status; inspect `kb/CRAWL_REPORT.json` and rerun the needed pass. `PAGES=100 MAX_FETCH=0 ./run.sh scrape` raises the feed-page limit and disables the fetch cap; this can take a long time and still does not prove all content was discovered.
+Re-runs preserve previously discovered video entries and skip readable transcripts. Blank or punctuation-only transcription results remain missing; short speech and non-Latin text are accepted. Text presence alone does not verify transcript quality or duration coverage. A failed request or exhausted fetch budget returns a nonzero status; inspect `kb/CRAWL_REPORT.json` and rerun the needed pass. `PAGES=100 MAX_FETCH=0 ./run.sh scrape` raises the feed-page limit and disables the fetch cap; this can take a long time and still does not prove all content was discovered.
 
 ---
 
